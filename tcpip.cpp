@@ -53,7 +53,7 @@ static uint8_t destmacaddr[ETH_LEN]; // storing both dns server and destination 
 static boolean waiting_for_dns_mac = false; //might be better to use bit flags and bitmask operations for these conditions
 static boolean has_dns_mac = false;
 static boolean waiting_for_dest_mac = false;
-static boolean has_dest_mac = false;
+static boolean has_dest_mac = true;
 static uint8_t gwmacaddr[ETH_LEN]; // Hardware (MAC) address of gateway router
 static uint8_t waitgwmac; // Bitwise flags of gateway router status - see below for states
 //Define gatweay router ARP statuses
@@ -374,13 +374,37 @@ uint8_t EtherCard::ntpProcessAnswer (uint32_t *time,uint8_t dstport_l) {
 }
 
 void EtherCard::udpPrepare (uint16_t sport, const uint8_t *dip, uint16_t dport) {
+    byte macaddr[] = { 0xA0, 0xCE, 0xC8, 0xC0, 0x69, 0x86 };
     if(is_lan(myip, dip)) {                    // this works because both dns mac and destinations mac are stored in same variable - destmacaddr
-        setMACandIPs(destmacaddr, dip);        // at different times. The program could have separate variable for dns mac, then here should be
+        //setMACandIPs(destmacaddr, dip);        // at different times. The program could have separate variable for dns mac, then here should be
+        setMACandIPs(macaddr, dip);        // at different times. The program could have separate variable for dns mac, then here should be
     } else {                                   // checked if dip is dns ip and separately if dip is hisip and then use correct mac.
-        setMACandIPs(gwmacaddr, dip);
+        //setMACandIPs(gwmacaddr, dip);
+        setMACandIPs(macaddr, dip);
     }
     // see http://tldp.org/HOWTO/Multicast-HOWTO-2.html
     // multicast or broadcast address, https://github.com/jcw/ethercard/issues/59
+    if ((dip[0] & 0xF0) == 0xE0 || *((unsigned long*) dip) == 0xFFFFFFFF || !memcmp(broadcastip,dip,IP_LEN))
+        EtherCard::copyMac(gPB + ETH_DST_MAC, allOnes);
+    gPB[ETH_TYPE_H_P] = ETHTYPE_IP_H_V;
+    gPB[ETH_TYPE_L_P] = ETHTYPE_IP_L_V;
+    memcpy_P(gPB + IP_P,iphdr,sizeof iphdr);
+    gPB[IP_TOTLEN_H_P] = 0;
+    gPB[IP_PROTO_P] = IP_PROTO_UDP_V;
+    gPB[UDP_DST_PORT_H_P] = (dport>>8);
+    gPB[UDP_DST_PORT_L_P] = dport;
+    gPB[UDP_SRC_PORT_H_P] = (sport>>8);
+    gPB[UDP_SRC_PORT_L_P] = sport;
+    gPB[UDP_LEN_H_P] = 0;
+    gPB[UDP_CHECKSUM_H_P] = 0;
+    gPB[UDP_CHECKSUM_L_P] = 0;
+}
+
+void EtherCard::udpPrepare (uint16_t sport, const uint8_t *dip, uint16_t dport,
+                            uint8_t *dmac) {
+    
+    setMACandIPs(dmac, dip);
+
     if ((dip[0] & 0xF0) == 0xE0 || *((unsigned long*) dip) == 0xFFFFFFFF || !memcmp(broadcastip,dip,IP_LEN))
         EtherCard::copyMac(gPB + ETH_DST_MAC, allOnes);
     gPB[ETH_TYPE_H_P] = ETHTYPE_IP_H_V;
@@ -409,7 +433,17 @@ void EtherCard::udpTransmit (uint16_t datalen) {
 
 void EtherCard::sendUdp (const char *data, uint8_t datalen, uint16_t sport,
                          const uint8_t *dip, uint16_t dport) {
-    udpPrepare(sport, dip, dport);
+    byte macaddr[] = { 0xA0, 0xCE, 0xC8, 0xC0, 0x69, 0x86 };
+    udpPrepare(sport, dip, dport, macaddr);
+    if (datalen>220)
+        datalen = 220;
+    memcpy(gPB + UDP_DATA_P, data, datalen);
+    udpTransmit(datalen);
+}
+
+void EtherCard::sendUdp (const char *data, uint8_t datalen, uint16_t sport,
+                         const uint8_t *dip, uint16_t dport, uint8_t*dmac) {
+    udpPrepare(sport, dip, dport, dmac);
     if (datalen>220)
         datalen = 220;
     memcpy(gPB + UDP_DATA_P, data, datalen);

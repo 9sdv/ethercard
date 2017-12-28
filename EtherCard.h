@@ -89,6 +89,7 @@ typedef void (*UdpServerCallback)(
     uint16_t dest_port,    ///< Port the packet was sent to
     uint8_t src_ip[IP_LEN],    ///< IP address of the sender
     uint16_t src_port,    ///< Port the packet was sent from
+    uint8_t *src_mac,
     const char *data,   ///< UDP payload data
     uint16_t len);        ///< Length of the payload data
 
@@ -430,6 +431,15 @@ public:
     */
     static void udpPrepare (uint16_t sport, const uint8_t *dip, uint16_t dport);
 
+    /**   @brief  Prepare a UDP message for transmission
+    *     @param  sport Source port
+    *     @param  dip Pointer to 4 byte destination IP address
+    *     @param  dport Destination port
+    *     @param  dmac Destination mac
+    */
+    static void udpPrepare (uint16_t sport, const uint8_t *dip, uint16_t dport,
+                            uint8_t *dmac);
+
     /**   @brief  Transmit UDP packet
     *     @param  len Size of payload
     */
@@ -444,6 +454,16 @@ public:
     */
     static void sendUdp (const char *data, uint8_t len, uint16_t sport,
                          const uint8_t *dip, uint16_t dport);
+
+    /**   @brief  Sends a UDP packet
+    *     @param  data Pointer to data
+    *     @param  len Size of payload (maximum 220 octets / bytes)
+    *     @param  sport Source port
+    *     @param  dip Pointer to 4 byte destination IP address
+    *     @param  dport Destination port
+    */
+    static void sendUdp (const char *data, uint8_t len, uint16_t sport,
+                         const uint8_t *dip, uint16_t dport, uint8_t *dmac);
 
     /**   @brief  Resister the function to handle ping events
     *     @param  cb Pointer to function
